@@ -1,0 +1,5 @@
+# 提示词工作台：Host 半边。注册随包 skill（image-prompt-studio）、五个工具
+# （校验/冻结比对/预设库/生图/生成历史）和 /image-prompt-studio 工作台（静态页面 + 数据接口）。
+- insert:
+    - id: image-prompt-studio
+      name: 'dsh-image-prompt-studio'

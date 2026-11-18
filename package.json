@@ -1,0 +1,55 @@
+{
+  "name": "dsh-image-prompt-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI 绘画提示词工作台：随包结构化 JSON 提示词 skill（生成/最小化修改/参考图反推/apiz 双模型出图四条路径），ips_validate 结构校验、ips_diff 冻结度比对、ips_presets 预设库（内置 9 套）、ips_generate 生图执行（apiz HTTP：GPT-Image reference_image_urls / Nano Banana image_urls）、生成历史；侧栏「提示词工作台」面板。",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lab",
+    "lib",
+    "skills",
+    "locale/*.json",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md"
+  ],
+  "icon": "./icon.svg",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "image-prompt",
+    "nano-banana",
+    "gpt-image",
+    "apiz",
+    "structured-prompt"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  },
+  "engines": {
+    "dsh": ">=0.2.1-rc.2 <0.3.0"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.19.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "^3.19.0"
+  },
+  "license": "MIT"
+}

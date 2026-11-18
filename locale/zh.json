@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "提示词工作台",
+    "description": "结构化 JSON 提示词的 AI 生图工作台：随包 image-prompt-studio skill（四条路径——一句话生成 26 字段结构化提示词、最小化修改（精准打击+逐字冻结）、参考图反推、apiz 双模型出图）。工具：ips_validate 结构校验（完整/部分双模式）、ips_diff 冻结度程序化比对（改了哪些字段、冻结率多少）、ips_presets 预设库（内置 Q版/三国/宋代/线稿漫画/讽刺漫画/中秋星野系列等 9 套 + 自存预设）、ips_generate 生图执行（apiz HTTP 通道：GPT-Image 走 reference_image_urls、Nano Banana 走 image_urls，默认 gpt-image-2.5-flare + quality=low，参考图先传 CDN、轮询超时不重提交防重复扣费）、ips_history 生成历史。提示词同时兼容 Nano Banana 与 GPT-Image 两个模型家族；参考图分析由 agent 本身完成，出图前必须把原图作为风格参考传回。需在插件设置配置 apizApiKey（或本机 apiz CLI 已登录），未配置时改用 apiz CLI 兜底。侧栏工作台含预设库、提示词编辑器（校验+diff 对比）、出图与历史看板。"
+  }
+}

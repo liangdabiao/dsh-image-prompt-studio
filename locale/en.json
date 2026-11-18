@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Image Prompt Studio",
+    "description": "Structured-JSON image prompt workbench: bundles the image-prompt-studio skill (four paths — one-sentence generation of a 26-field structured JSON prompt, minimal modification with strict freeze discipline, reference-image reverse prompting, and apiz dual-model image generation). Tools: ips_validate schema validation (full/partial modes), ips_diff programmatic freeze check (changed vs frozen leaf fields and freeze rate), ips_presets preset library (9 bundled presets plus user-saved ones), ips_generate image generation over the apiz HTTP API (GPT-Image uses reference_image_urls, Nano Banana uses image_urls; defaults to gpt-image-2.5-flare at quality=low; reference images are uploaded to the apiz CDN first, and poll timeouts never resubmit to avoid double billing), ips_history generation history. One JSON works across both the Nano Banana and GPT-Image model families; reference-image analysis is done by the agent itself, and the original image must always be passed back as a style reference at generation time. Requires an apizApiKey in plugin settings (or a logged-in local apiz CLI); otherwise fall back to the apiz CLI. The sidebar workbench has a preset library, prompt editor (validate + diff view), generation entry and history board."
+  }
+}

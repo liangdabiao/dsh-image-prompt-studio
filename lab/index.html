@@ -27,15 +27,61 @@
   </header>
 
   <nav class="tabs" id="tabs">
-    <button class="tab active" data-tab="presets">预设库</button>
+    <button class="tab active" data-tab="create">开始创作</button>
+    <button class="tab" data-tab="presets">预设库</button>
     <button class="tab" data-tab="editor">提示词编辑</button>
     <button class="tab" data-tab="generate">出图</button>
     <button class="tab" data-tab="history">生成历史</button>
   </nav>
 
   <main>
+    <!-- 开始创作（首屏引导：四条路径 → 一键带指令开对话） -->
+    <section id="tab-create" class="panel active">
+      <div class="notice">
+        <b>提示词的创作在左边的对话框里完成</b>：读参考图分析风格、组织措辞、最小化修改，由对话里的 agent 按随包 skill 执行；
+        本面板负责机械环节——校验结构、冻结比对、预设存取、出图执行与历史。下面四张卡片选一条路径，点按钮就会带着填好的指令开一个新对话。
+      </div>
+      <div class="flow-grid">
+        <div class="flow-card">
+          <div class="flow-head"><span class="flow-step">路径 A+图</span><h3>参考图反推</h3></div>
+          <p>给一张参考图（本地图片绝对路径），agent 直接读图按四维度提取风格特征（角色/场景/画风/构图镜头），反推出结构化提示词；出图时原图自动传回作风格参考。</p>
+          <label>参考图路径（每行一个，本地绝对路径或 http URL）
+            <textarea id="create-refs" rows="2" spellcheck="false" placeholder="D:\pics\my-style.jpg"></textarea>
+          </label>
+          <label>想要的画面（可留空 = 完全按参考图）
+            <input id="create-ref-desc" type="text" placeholder="例如：同款画风，换成骑白马的女侠">
+          </label>
+          <button id="btn-create-from-ref" class="btn primary">在对话里开始反推 →</button>
+        </div>
+        <div class="flow-card">
+          <div class="flow-head"><span class="flow-step">路径 A</span><h3>一句话生成</h3></div>
+          <p>没有参考图，直接一句话描述想要的画面，agent 按 26 字段规范产出完整结构化 JSON 提示词。</p>
+          <label>画面描述
+            <textarea id="create-desc" rows="4" spellcheck="false" placeholder="例如：蔚蓝档案风格的星野，坐在海边车站长椅上，夏日午后"></textarea>
+          </label>
+          <button id="btn-create-from-desc" class="btn primary">在对话里开始生成 →</button>
+        </div>
+        <div class="flow-card">
+          <div class="flow-head"><span class="flow-step">路径 B</span><h3>最小化修改</h3></div>
+          <p>拿一份已有 JSON 说「改成 XX」，agent 只动你要求的字段、其余逐字冻结；改完自动跑 ips_diff 冻结比对，画风不漂移。先在「提示词编辑」页粘好原 JSON 或从预设库加载。</p>
+          <label>修改指令
+            <input id="create-modify" type="text" placeholder="例如：把冬天改成夏天，主体换成雪地里撒欢的柴犬">
+          </label>
+          <button id="btn-create-modify" class="btn primary">带 JSON 去对话改 →</button>
+          <div class="muted" id="create-modify-note"></div>
+        </div>
+        <div class="flow-card">
+          <div class="flow-head"><span class="flow-step">路径 C</span><h3>提示词出图</h3></div>
+          <p>提示词就绪后在本面板直接出图：GPT-Image（默认）或 Nano Banana 双家族任选，参考图自动传回。源自参考图的提示词，出图时必须把原图传回（铁律）。</p>
+          <p class="muted">前提：提示词 JSON 已在「出图」页（编辑器会自动带过去），且插件设置配好 apizApiKey 或本机 apiz CLI 已登录。</p>
+          <button id="btn-create-goto-gen" class="btn primary">去出图页 →</button>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:12px">新来的？先去「预设库」挑一套贴近的预设（Q版/三国/宋代/线稿漫画/讽刺漫画/中秋星野等 9 套）加载进编辑器看看 JSON 长什么样，再回这里选路径。</div>
+    </section>
+
     <!-- 预设库 -->
-    <section id="tab-presets" class="panel active">
+    <section id="tab-presets" class="panel">
       <div class="hint">内置 9 套预设（只读）+ 用户自存预设。点「加载」把预设读进编辑器，生成新提示词时可以作风格基准改写。「仅角色」等部分结构预设走部分模式校验。</div>
       <div class="preset-grid" id="preset-list"><div class="muted">加载中…</div></div>
     </section>

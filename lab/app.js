@@ -27,6 +27,71 @@ function goto(tab) {
   $(`.tab[data-tab="${tab}"]`)?.click()
 }
 
+// ---------------------------------------------------------------- 开始创作（四条路径 → 带指令开对话）
+// 创作归对话里的 agent（读图分析/措辞/修改），这里只负责把用户输入拼成一条可执行的指令
+// postMessage 给宿主 client.js 开新对话——面板自身不生成提示词。
+function askAgent(prompt) {
+  parent.postMessage({ type: 'image-prompt-studio:ask', prompt }, location.origin)
+}
+
+$('#btn-create-from-ref').addEventListener('click', () => {
+  const refs = $('#create-refs').value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
+  const desc = $('#create-ref-desc').value.trim()
+  if (!refs.length) { alert('先填至少一个参考图路径（本地绝对路径或 http URL）'); return }
+  const lines = [
+    '请用 image-prompt-studio skill 的路径 A（带参考图）生成结构化 JSON 提示词：',
+    '',
+    '参考图（直接读图分析，不要调外部视觉 API）：',
+    ...refs.map((p) => `- ${p}`),
+    '',
+    desc ? `画面要求：${desc}（画风与色彩基调以参考图为准）` : '画面内容完全以参考图为准，逐维度还原。',
+    '',
+    '要求：1) 按四维度提取特征（角色特征/场景环境/画面风格/构图与镜头角度）；2) 产出完整 26 字段 JSON（不要 markdown 围栏），并用 ips_validate 校验；3) 记住上面的参考图路径——之后出图时必须作为风格参考传回（ips_generate referenceImages）。',
+  ]
+  askAgent(lines.join('\n'))
+})
+
+$('#btn-create-from-desc').addEventListener('click', () => {
+  const desc = $('#create-desc').value.trim()
+  if (!desc) { alert('先写一句画面描述'); return }
+  const lines = [
+    '请用 image-prompt-studio skill 的路径 A 生成结构化 JSON 提示词（无参考图，纯文生图）：',
+    '',
+    `画面描述：${desc}`,
+    '',
+    '要求：1) 可先用 ips_presets（action=list/get）取最贴近的预设作风格基准再改写；2) 产出完整 26 字段 JSON（不要 markdown 围栏），并用 ips_validate 校验；3) 字段措辞参考 references/options-library.md 词库，有画面感、专业、具体。',
+  ]
+  askAgent(lines.join('\n'))
+})
+
+$('#btn-create-modify').addEventListener('click', () => {
+  const instruction = $('#create-modify').value.trim()
+  const json = $('#editor-after').value.trim() || $('#editor-before').value.trim()
+  const note = $('#create-modify-note')
+  if (!json) { note.textContent = '「提示词编辑」页还没有 JSON：先粘贴一份或从预设库加载'; return }
+  if (!instruction) { note.textContent = '先填修改指令（例如：把冬天改成夏天）'; return }
+  note.textContent = ''
+  const lines = [
+    '请用 image-prompt-studio skill 的路径 B 对这份结构化提示词做最小化修改：',
+    '',
+    '```json',
+    json,
+    '```',
+    '',
+    `修改指令：${instruction}`,
+    '',
+    '要求：1) 精准打击+完全冻结——只改指令覆盖或逻辑必须联动的字段，其余逐字一致，禁止润色发散；2) 输出完整 JSON 并用 ips_validate 校验；3) 改完必须调 ips_diff 做冻结度自检（改动清单全部落在指令覆盖的节点上才算合格）。',
+  ]
+  askAgent(lines.join('\n'))
+})
+
+$('#btn-create-goto-gen').addEventListener('click', () => {
+  // 编辑器里的 JSON（修改后优先）自动带进出图页
+  const json = $('#editor-after').value.trim() || $('#editor-before').value.trim()
+  if (json && !$('#gen-prompt').value.trim()) $('#gen-prompt').value = json
+  goto('generate')
+})
+
 // ---------------------------------------------------------------- 状态条
 async function loadStatus() {
   try {

@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'ips-test-'))
 
 const { parsePrompt, validatePrompt, diffPrompts, flattenLeaves, getByPath } = await import('../lib/check.js')
-const { listPresets, getPreset, savePreset, deletePreset, readHistory, addHistoryRecord, removeRecord, clearHistory, summarizeHistory, readStyle, saveStyle, clearStyle, saveUploadDataUrl, UPLOADS_DIR } = await import('../lib/data.js')
+const { listPresets, getPreset, savePreset, deletePreset, readHistory, addHistoryRecord, removeRecord, clearHistory, summarizeHistory, readStyle, saveStyle, clearStyle, saveUploadDataUrl, UPLOADS_DIR, listStyles, saveStyleToLibrary, deleteStyle, getStyle } = await import('../lib/data.js')
 const { buildApizCreateBody, callApizImageApi, waitForApizTask, clampApizPrompt, normalizeAspectRatio, normalizeApizQuality, modelFamily, maxReferenceImages, DEFAULT_APIZ_MODEL } = await import('../lib/image/apiz.js')
 const { resolveApizApiKey, readApizCliApiKey } = await import('../lib/image/apizUpload.js')
 const { normalizeReferenceInput, assemblePrompt, runGenerate, IMAGES_DIR } = await import('../lib/generate.js')
@@ -346,6 +346,20 @@ test('style：save/get/clear 生命周期；缺 prompt/缺参考图被拒', () =
   assert.equal(clearStyle(), true)
   assert.equal(readStyle(), null)
   assert.equal(clearStyle(), false)
+})
+
+test('styleLibrary：入库/列出/删除；同名可存多套（id 区分）', () => {
+  const a = saveStyleToLibrary({ name: '粗描边漫画', prompt: { 风格模式: 'A' }, referenceImage: 'D:/r/a.jpg', note: 'n1' })
+  const b = saveStyleToLibrary({ name: '水彩国风', prompt: { 风格模式: 'B' }, referenceImage: 'D:/r/b.jpg' })
+  const list = listStyles()
+  assert.ok(list.some((s) => s.id === a.id && s.note === 'n1'))
+  assert.ok(list.some((s) => s.id === b.id))
+  assert.equal(listStyles()[0].id, b.id, '新的在前')
+  assert.equal(getStyle(a.id).name, '粗描边漫画')
+  assert.equal(deleteStyle(a.id), true)
+  assert.equal(deleteStyle(a.id), false)
+  assert.throws(() => saveStyleToLibrary({ name: '', prompt: { x: 1 } }), /风格名不能为空/)
+  assert.throws(() => saveStyleToLibrary({ name: 'x', prompt: 'not-object' }), /JSON 对象/)
 })
 
 test('saveUploadDataUrl：data URL 落盘 uploads/，扩展名按 mime；非法输入报错', () => {

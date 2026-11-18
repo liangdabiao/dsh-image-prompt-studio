@@ -1,6 +1,6 @@
 {
   "name": "dsh-image-prompt-studio",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "AI 绘画提示词工作台：随包结构化 JSON 提示词 skill（生成/最小化修改/参考图反推/apiz 双模型出图四条路径），ips_validate 结构校验、ips_diff 冻结度比对、ips_presets 预设库（内置 9 套）、ips_generate 生图执行（apiz HTTP：GPT-Image reference_image_urls / Nano Banana image_urls）、生成历史；侧栏「提示词工作台」面板。",

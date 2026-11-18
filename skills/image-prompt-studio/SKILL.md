@@ -37,6 +37,7 @@ agent_created: true
 4. 字段填写规范与各字段写法要领见 `<SKILL_ROOT>/references/prompt-schema.md`；可从 `<SKILL_ROOT>/references/options-library.md` 的词库中选用或组合高质量措辞（词库是素材不是枷锁，按画面需要自由发挥）。
 5. 输出前用校验确认结构无误，再把 JSON 交付用户（保存为 `.json` 文件或直接展示）。
 6. 需要风格基准时用 `ips_presets`（action=get）取最贴近的预设改写字段。
+7. **「出图工作台」第 1 步发起的分析，收尾必须调 `ips_style`（action=set）把风格 JSON 连同参考图路径写回面板**——用户在第 2 步等着选这个风格出图。
 
 ## 路径 B：最小化修改已有提示词
 

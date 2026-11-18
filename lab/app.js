@@ -27,70 +27,152 @@ function goto(tab) {
   $(`.tab[data-tab="${tab}"]`)?.click()
 }
 
-// ---------------------------------------------------------------- 开始创作（四条路径 → 带指令开对话）
-// 创作归对话里的 agent（读图分析/措辞/修改），这里只负责把用户输入拼成一条可执行的指令
-// postMessage 给宿主 client.js 开新对话——面板自身不生成提示词。
+// ---------------------------------------------------------------- 出图工作台（两步向导，唯一主流程）
+// 创作归对话里的 agent（读图分析/措辞/修改），面板只做：上传落盘、拼指令开对话、
+// 展示 agent 用 ips_style 写回的风格、直连出图与历史。提示词 JSON 对用户不可见（查看 JSON 仅读）。
 function askAgent(prompt) {
   parent.postMessage({ type: 'image-prompt-studio:ask', prompt }, location.origin)
 }
 
-$('#btn-create-from-ref').addEventListener('click', () => {
-  const refs = $('#create-refs').value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
-  const desc = $('#create-ref-desc').value.trim()
-  if (!refs.length) { alert('先填至少一个参考图路径（本地绝对路径或 http URL）'); return }
-  const lines = [
-    '请用 image-prompt-studio skill 的路径 A（带参考图）生成结构化 JSON 提示词：',
+let wbRefPath = ''       // 第 1 步就绪的参考图路径（上传落盘或手填）
+let wbStyle = null       // agent 写回的当前风格 { prompt, referenceImage, note, updatedAt }
+let stylePollTimer = null
+
+function renderRefPreview(src) {
+  const box = $('#wb-ref-preview')
+  if (!src) { box.hidden = true; box.innerHTML = ''; return }
+  box.hidden = false
+  box.innerHTML = `<img src="${src}" alt="参考图预览">`
+}
+
+function renderStyleCard(style) {
+  wbStyle = style
+  const has = Boolean(style && style.prompt)
+  $('#wb-style-empty').hidden = has
+  $('#wb-style-card').hidden = !has
+  $('#btn-wb-generate').disabled = !has
+  $('#btn-wb-direct').disabled = !has
+  if (!has) return
+  const p = style.prompt || {}
+  $('#wb-style-summary').textContent = `风格：${String(p['风格模式'] || '').slice(0, 80)}`
+  $('#wb-style-note').textContent = style.note ? `说明：${style.note}` : ''
+  $('#wb-style-thumb').src = style.referenceImage ? `${API}/media?path=${encodeURIComponent(style.referenceImage)}` : ''
+}
+
+async function pollStyle() {
+  try {
+    const r = await fetchJSON('/api/style')
+    const style = r.style || null
+    if (JSON.stringify(style) !== JSON.stringify(wbStyle)) renderStyleCard(style)
+  } catch { /* 轮询抖动 */ }
+}
+
+// 文件选择 → 落盘 uploads/（agent 读这个路径；出图时同路径传回）
+$('#wb-file').addEventListener('change', async () => {
+  const file = $('#wb-file').files[0]
+  if (!file) return
+  const report = $('#wb-step1-report')
+  report.innerHTML = '<div class="line warn">上传中…</div>'
+  try {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = () => reject(new Error('读文件失败'))
+      reader.readAsDataURL(file)
+    })
+    const r = await fetchJSON('/api/style/upload', post({ dataUrl, name: file.name }))
+    if (!r.ok) throw new Error(r.error || '上传失败')
+    wbRefPath = r.file
+    $('#wb-ref-path').value = wbRefPath
+    renderRefPreview(dataUrl)
+    report.innerHTML = `<div class="line ok">✅ 已就绪：${escapeHtml(r.file)}</div>`
+    $('#btn-wb-analyze').disabled = false
+  } catch (err) {
+    report.innerHTML = `<div class="line err">❌ ${escapeHtml(String(err.message || err))}</div>`
+  }
+})
+
+$('#wb-ref-path').addEventListener('input', () => {
+  wbRefPath = $('#wb-ref-path').value.trim()
+  $('#btn-wb-analyze').disabled = !wbRefPath
+  renderRefPreview(wbRefPath && /^https?:/i.test(wbRefPath) ? wbRefPath : '')
+})
+
+// 第 1 步：开对话让 agent 分析风格并 ips_style 写回
+$('#btn-wb-analyze').addEventListener('click', () => {
+  const ref = wbRefPath || $('#wb-ref-path').value.trim()
+  if (!ref) { alert('先上传一张图片或填参考图路径'); return }
+  const prompt = [
+    '请执行 image-prompt-studio skill 的「第 1 步 · 导图定风格」：',
     '',
     '参考图（直接读图分析，不要调外部视觉 API）：',
-    ...refs.map((p) => `- ${p}`),
+    `- ${ref}`,
     '',
-    desc ? `画面要求：${desc}（画风与色彩基调以参考图为准）` : '画面内容完全以参考图为准，逐维度还原。',
-    '',
-    '要求：1) 按四维度提取特征（角色特征/场景环境/画面风格/构图与镜头角度）；2) 产出完整 26 字段 JSON（不要 markdown 围栏），并用 ips_validate 校验；3) 记住上面的参考图路径——之后出图时必须作为风格参考传回（ips_generate referenceImages）。',
-  ]
-  askAgent(lines.join('\n'))
+    '要求：1) 按四维度提取特征（角色特征/场景环境/画面风格/构图与镜头角度），产出完整 26 字段风格提示词 JSON（不要 markdown 围栏）；2) 用 ips_validate 校验；3) 校验通过后**必须调 ips_style（action=set，prompt=风格 JSON，referenceImage=上面的参考图路径，note=一句话画风概括）写回面板**——用户在「出图工作台」第 2 步等着选这个风格；4) 完成后告诉用户可以回面板第 2 步出图。',
+  ].join('\n')
+  $('#wb-step1-report').innerHTML = '<div class="line ok">已发起：agent 正在对话里分析这张图，完成后风格会自动出现在第 2 步（可留在本页等待）。</div>'
+  askAgent(prompt)
 })
 
-$('#btn-create-from-desc').addEventListener('click', () => {
-  const desc = $('#create-desc').value.trim()
-  if (!desc) { alert('先写一句画面描述'); return }
-  const lines = [
-    '请用 image-prompt-studio skill 的路径 A 生成结构化 JSON 提示词（无参考图，纯文生图）：',
+// 第 2 步·推荐：agent 精修（把描述融进主体，风格冻结）→ 带参考图出图
+$('#btn-wb-generate').addEventListener('click', () => {
+  const desc = $('#wb-desc').value.trim()
+  if (!wbStyle) { alert('还没有风格：先完成第 1 步'); return }
+  if (!desc) { alert('先写描述要求：想画什么？'); return }
+  const prompt = [
+    '请执行 image-prompt-studio skill 的「第 2 步 · 风格出图」：',
     '',
-    `画面描述：${desc}`,
-    '',
-    '要求：1) 可先用 ips_presets（action=list/get）取最贴近的预设作风格基准再改写；2) 产出完整 26 字段 JSON（不要 markdown 围栏），并用 ips_validate 校验；3) 字段措辞参考 references/options-library.md 词库，有画面感、专业、具体。',
-  ]
-  askAgent(lines.join('\n'))
-})
-
-$('#btn-create-modify').addEventListener('click', () => {
-  const instruction = $('#create-modify').value.trim()
-  const json = $('#editor-after').value.trim() || $('#editor-before').value.trim()
-  const note = $('#create-modify-note')
-  if (!json) { note.textContent = '「提示词编辑」页还没有 JSON：先粘贴一份或从预设库加载'; return }
-  if (!instruction) { note.textContent = '先填修改指令（例如：把冬天改成夏天）'; return }
-  note.textContent = ''
-  const lines = [
-    '请用 image-prompt-studio skill 的路径 B 对这份结构化提示词做最小化修改：',
-    '',
+    '当前风格（用户在第 1 步用这张参考图定下的，出图时必须把该原图作为风格参考传回）：',
+    `- 参考图：${wbStyle.referenceImage}`,
+    '- 风格 JSON：',
     '```json',
-    json,
+    JSON.stringify(wbStyle.prompt, null, 2),
     '```',
     '',
-    `修改指令：${instruction}`,
+    `用户描述要求：${desc}`,
     '',
-    '要求：1) 精准打击+完全冻结——只改指令覆盖或逻辑必须联动的字段，其余逐字一致，禁止润色发散；2) 输出完整 JSON 并用 ips_validate 校验；3) 改完必须调 ips_diff 做冻结度自检（改动清单全部落在指令覆盖的节点上才算合格）。',
-  ]
-  askAgent(lines.join('\n'))
+    '要求：1) 按路径 B 最小化修改——把描述融进「场景.主体」等画面内容字段（人物/主体/动作/场景元素），风格模式、画面气质、审美控制、相机等风格字段逐字冻结；2) 用 ips_validate 校验 + ips_diff 冻结自检（改动只落在描述覆盖的节点）；3) 用 ips_generate 出图（referenceImages=[上面的参考图路径]，model 与用户在面板选的一致即可默认 GPT-Image flare low）；4) 完成后把成图路径告诉用户（面板「生成历史」会同步出现）。',
+  ].join('\n')
+  $('#wb-step2-report').innerHTML = '<div class="line ok">已发起：agent 正在对话里精修提示词并出图（约 2-9 分钟），完成后成图会出现在「生成历史」。</div>'
+  askAgent(prompt)
 })
 
-$('#btn-create-goto-gen').addEventListener('click', () => {
-  // 编辑器里的 JSON（修改后优先）自动带进出图页
-  const json = $('#editor-after').value.trim() || $('#editor-before').value.trim()
-  if (json && !$('#gen-prompt').value.trim()) $('#gen-prompt').value = json
-  goto('generate')
+// 第 2 步·快速：不改提示词，描述作为附加要求直连出图
+$('#btn-wb-direct').addEventListener('click', async () => {
+  const desc = $('#wb-desc').value.trim()
+  const report = $('#wb-step2-report')
+  if (!wbStyle) { alert('还没有风格：先完成第 1 步'); return }
+  if (!desc) { alert('先写描述要求：想画什么？'); return }
+  try {
+    $('#btn-wb-direct').disabled = true
+    report.innerHTML = '<div class="line warn">已提交，任务运行中（单张约 2-9 分钟，超时不重提交）…</div>'
+    const r = await fetchJSON('/api/generate', post({
+      prompt: wbStyle.prompt,
+      extraRequirements: `画面内容：${desc}。除画面内容外，风格、色彩与质感严格以 JSON 描述为准。`,
+      model: $('#wb-model').value,
+      aspectRatio: $('#wb-aspect').value,
+      referenceImages: wbStyle.referenceImage ? [wbStyle.referenceImage] : [],
+    }))
+    if (!r.ok) throw new Error(r.error || '提交失败')
+    pollJob(r.job, report, () => { $('#btn-wb-direct').disabled = !wbStyle; loadHistory(); loadStatus() })
+  } catch (err) {
+    report.innerHTML = `<div class="line err">❌ ${escapeHtml(String(err.message || err))}</div>`
+    $('#btn-wb-direct').disabled = !wbStyle
+  }
 })
+
+$('#btn-wb-view-json').addEventListener('click', () => {
+  if (!wbStyle) return
+  $('#editor-before').value = JSON.stringify(wbStyle.prompt, null, 2)
+  goto('editor')
+})
+$('#btn-wb-clear-style').addEventListener('click', async () => {
+  await fetchJSON('/api/style/clear', post({}))
+  renderStyleCard(null)
+})
+
+// 风格常驻轮询：agent 在对话里调 ips_style 写回后，第 2 步卡片自动亮起（不依赖用户刷新）
+if (!stylePollTimer) { pollStyle(); stylePollTimer = setInterval(pollStyle, 2500) }
 
 // ---------------------------------------------------------------- 状态条
 async function loadStatus() {
@@ -265,16 +347,14 @@ $('#btn-generate').addEventListener('click', async () => {
   }
 })
 
-function pollJob(jobId) {
-  const box = $('#gen-job')
+function pollJob(jobId, box = $('#gen-job'), onDone = null) {
   const timer = setInterval(async () => {
     try {
       const r = await fetchJSON(`/api/job?id=${encodeURIComponent(jobId)}`)
       const job = r.job || {}
       if (job.status === 'running') { box.innerHTML = '<div class="line warn">生成中…（apiz 单张 2-9 分钟，超时不重提交）</div>'; return }
       clearInterval(timer)
-      $('#btn-generate').disabled = false
-      $('#gen-note').textContent = ''
+      if (onDone) { onDone() } else { $('#btn-generate').disabled = false; $('#gen-note').textContent = '' }
       if (job.status === 'done') {
         const rec = job.record
         const price = typeof rec.price === 'number' ? `，消耗 ${rec.price} 积分` : ''
@@ -282,8 +362,7 @@ function pollJob(jobId) {
         box.innerHTML = `<div class="line ok">✅ 出图完成（${Math.round(rec.durationMs / 1000)}s${price}${refs}）</div>` +
           (rec.warnings?.length ? `<div class="line warn">${escapeHtml(rec.warnings.join('；'))}</div>` : '')
         renderPreview(job.files || [])
-        loadStatus()
-        loadHistory()
+        if (!onDone) { loadStatus(); loadHistory() }
       } else {
         box.innerHTML = `<div class="line err">❌ ${escapeHtml(job.error || '生成失败')}</div>`
       }
@@ -368,3 +447,7 @@ function escapeAttr(text) {
 applyScheme(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
 loadStatus()
 loadPresets()
+pollStyle()
+// 刷新后恢复第 1 步状态（路径已填则按钮可用）
+wbRefPath = $('#wb-ref-path').value.trim()
+$('#btn-wb-analyze').disabled = !wbRefPath

@@ -27,57 +27,70 @@
   </header>
 
   <nav class="tabs" id="tabs">
-    <button class="tab active" data-tab="create">开始创作</button>
+    <button class="tab active" data-tab="workbench">出图工作台</button>
+    <button class="tab" data-tab="history">生成历史</button>
     <button class="tab" data-tab="presets">预设库</button>
     <button class="tab" data-tab="editor">提示词编辑</button>
-    <button class="tab" data-tab="generate">出图</button>
-    <button class="tab" data-tab="history">生成历史</button>
+    <button class="tab" data-tab="generate">高级出图</button>
   </nav>
 
   <main>
-    <!-- 开始创作（首屏引导：四条路径 → 一键带指令开对话） -->
-    <section id="tab-create" class="panel active">
-      <div class="notice">
-        <b>提示词的创作在左边的对话框里完成</b>：读参考图分析风格、组织措辞、最小化修改，由对话里的 agent 按随包 skill 执行；
-        本面板负责机械环节——校验结构、冻结比对、预设存取、出图执行与历史。下面四张卡片选一条路径，点按钮就会带着填好的指令开一个新对话。
+    <!-- 出图工作台：两步向导（唯一主流程） -->
+    <section id="tab-workbench" class="panel active">
+      <div class="steps">
+        <!-- 第 1 步：导入图片 → agent 分析风格 -->
+        <div class="step-card">
+          <div class="step-tag">第 1 步 · 导图定风格</div>
+          <h2>上传一张喜欢的风格图</h2>
+          <p class="muted">插画 / 漫画 / 摄影都行。agent 会读图分析画风（角色、场景、色彩、构图），提炼成风格提示词并写回第 2 步。</p>
+          <div class="upload-row">
+            <label class="upload-btn">选择图片<input type="file" id="wb-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>
+            <span class="muted">或粘贴本地路径</span>
+            <input type="text" id="wb-ref-path" placeholder="D:\pics\my-style.jpg">
+          </div>
+          <div id="wb-ref-preview" class="ref-preview" hidden><img alt="参考图预览"></div>
+          <button id="btn-wb-analyze" class="btn primary" disabled>① 分析这张图，生成风格 →</button>
+          <div class="report" id="wb-step1-report"></div>
+        </div>
+        <!-- 第 2 步：风格就绪 → 描述要求 → 出图 -->
+        <div class="step-card">
+          <div class="step-tag">第 2 步 · 风格出图</div>
+          <h2>选风格，描述想画的画面</h2>
+          <div id="wb-style-empty" class="muted">还没有风格：先完成第 1 步。agent 分析完会自动把风格写回这里（点第 1 步按钮后回到对话看进度即可）。</div>
+          <div id="wb-style-card" class="style-card" hidden>
+            <img id="wb-style-thumb" alt="风格参考图">
+            <div class="style-info">
+              <b>风格已就绪</b>
+              <div class="muted" id="wb-style-summary"></div>
+              <div class="muted" id="wb-style-note"></div>
+            </div>
+            <div class="style-actions">
+              <button id="btn-wb-view-json" class="btn ghost">查看 JSON</button>
+              <button id="btn-wb-clear-style" class="btn ghost">换风格</button>
+            </div>
+          </div>
+          <label>描述要求（想画什么；风格保持不变）
+            <textarea id="wb-desc" rows="3" spellcheck="false" placeholder="例如：同款画风，画一个骑白马的女侠在雪原上冲锋"></textarea>
+          </label>
+          <div class="row wb-opts">
+            <label>模型
+              <select id="wb-model">
+                <option value="apiz/gpt-image-2.5-flare">GPT-Image flare（默认）</option>
+                <option value="apiz/gpt-image-2.5-sunburst">GPT-Image sunburst</option>
+                <option value="service-inference/gemini-nano-banana-2.1">Nano Banana 2.1</option>
+                <option value="fal-ai/nano-banana-pro">Nano Banana Pro（较贵）</option>
+              </select>
+            </label>
+            <label>比例
+              <select id="wb-aspect"><option>1:1</option><option>3:4</option><option>4:5</option><option>9:16</option><option>16:9</option><option>4:3</option><option>3:2</option><option>2:3</option></select>
+            </label>
+          </div>
+          <button id="btn-wb-generate" class="btn primary" disabled>② 生成图片（agent 精修 + 带风格参考图）</button>
+          <button id="btn-wb-direct" class="btn" disabled>不改提示词直接出图（更快）</button>
+          <div class="muted">推荐第一条：agent 把你的描述融进画面主体（风格逐字冻结）再出图；第二条把描述作为附加要求直接传给模型，快但粗。</div>
+          <div class="report" id="wb-step2-report"></div>
+        </div>
       </div>
-      <div class="flow-grid">
-        <div class="flow-card">
-          <div class="flow-head"><span class="flow-step">路径 A+图</span><h3>参考图反推</h3></div>
-          <p>给一张参考图（本地图片绝对路径），agent 直接读图按四维度提取风格特征（角色/场景/画风/构图镜头），反推出结构化提示词；出图时原图自动传回作风格参考。</p>
-          <label>参考图路径（每行一个，本地绝对路径或 http URL）
-            <textarea id="create-refs" rows="2" spellcheck="false" placeholder="D:\pics\my-style.jpg"></textarea>
-          </label>
-          <label>想要的画面（可留空 = 完全按参考图）
-            <input id="create-ref-desc" type="text" placeholder="例如：同款画风，换成骑白马的女侠">
-          </label>
-          <button id="btn-create-from-ref" class="btn primary">在对话里开始反推 →</button>
-        </div>
-        <div class="flow-card">
-          <div class="flow-head"><span class="flow-step">路径 A</span><h3>一句话生成</h3></div>
-          <p>没有参考图，直接一句话描述想要的画面，agent 按 26 字段规范产出完整结构化 JSON 提示词。</p>
-          <label>画面描述
-            <textarea id="create-desc" rows="4" spellcheck="false" placeholder="例如：蔚蓝档案风格的星野，坐在海边车站长椅上，夏日午后"></textarea>
-          </label>
-          <button id="btn-create-from-desc" class="btn primary">在对话里开始生成 →</button>
-        </div>
-        <div class="flow-card">
-          <div class="flow-head"><span class="flow-step">路径 B</span><h3>最小化修改</h3></div>
-          <p>拿一份已有 JSON 说「改成 XX」，agent 只动你要求的字段、其余逐字冻结；改完自动跑 ips_diff 冻结比对，画风不漂移。先在「提示词编辑」页粘好原 JSON 或从预设库加载。</p>
-          <label>修改指令
-            <input id="create-modify" type="text" placeholder="例如：把冬天改成夏天，主体换成雪地里撒欢的柴犬">
-          </label>
-          <button id="btn-create-modify" class="btn primary">带 JSON 去对话改 →</button>
-          <div class="muted" id="create-modify-note"></div>
-        </div>
-        <div class="flow-card">
-          <div class="flow-head"><span class="flow-step">路径 C</span><h3>提示词出图</h3></div>
-          <p>提示词就绪后在本面板直接出图：GPT-Image（默认）或 Nano Banana 双家族任选，参考图自动传回。源自参考图的提示词，出图时必须把原图传回（铁律）。</p>
-          <p class="muted">前提：提示词 JSON 已在「出图」页（编辑器会自动带过去），且插件设置配好 apizApiKey 或本机 apiz CLI 已登录。</p>
-          <button id="btn-create-goto-gen" class="btn primary">去出图页 →</button>
-        </div>
-      </div>
-      <div class="hint" style="margin-top:12px">新来的？先去「预设库」挑一套贴近的预设（Q版/三国/宋代/线稿漫画/讽刺漫画/中秋星野等 9 套）加载进编辑器看看 JSON 长什么样，再回这里选路径。</div>
     </section>
 
     <!-- 预设库 -->

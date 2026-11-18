@@ -142,8 +142,27 @@ await test('静态页：/ 返回工作台 index.html；未知 api 404；未知�
   assert.equal(staticMiss.status, 404)
 })
 
-await test('五个工具全部可从 api 侧取到（同引擎）', async () => {
-  assert.equal(TOOLS.length, 5)
+await test('风格槽路由：upload 落盘 → set 写回 → get 可读 → clear 清空；media 放行 uploads', async () => {
+  const up = await post('/api/style/upload', { dataUrl: 'data:image/png;base64,iVBORw0KGgo=', name: 'style.png' })
+  assert.equal(up.body.ok, true)
+  assert.match(up.body.file, /uploads/)
+  const badSet = await post('/api/style', { prompt: { 风格模式: 'x' } })
+  assert.equal(badSet.status, 400, '缺 referenceImage 应 400')
+  const set = await post('/api/style', { prompt: { 风格模式: '测试' }, referenceImage: up.body.file, note: '自检风格' })
+  assert.equal(set.body.ok, true)
+  const got = await get('/api/style')
+  assert.equal(got.body.style.referenceImage, up.body.file)
+  // media 现在应能读 uploads 里的参考图（风格卡缩略图依赖它）
+  const media = await fetch(`${base}/media?path=${encodeURIComponent(up.body.file)}`)
+  assert.equal(media.status, 200)
+  const cleared = await post('/api/style/clear', {})
+  assert.equal(cleared.body.ok, true)
+  const gotEmpty = await get('/api/style')
+  assert.equal(gotEmpty.body.style, null)
+})
+
+await test('六个工具全部可从 api 侧取到（同引擎）', async () => {
+  assert.equal(TOOLS.length, 6)
 })
 
 server.close()

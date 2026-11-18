@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'ips-test-'))
 
 const { parsePrompt, validatePrompt, diffPrompts, flattenLeaves, getByPath } = await import('../lib/check.js')
-const { listPresets, getPreset, savePreset, deletePreset, readHistory, addHistoryRecord, removeRecord, clearHistory, summarizeHistory } = await import('../lib/data.js')
+const { listPresets, getPreset, savePreset, deletePreset, readHistory, addHistoryRecord, removeRecord, clearHistory, summarizeHistory, readStyle, saveStyle, clearStyle, saveUploadDataUrl, UPLOADS_DIR } = await import('../lib/data.js')
 const { buildApizCreateBody, callApizImageApi, waitForApizTask, clampApizPrompt, normalizeAspectRatio, normalizeApizQuality, modelFamily, maxReferenceImages, DEFAULT_APIZ_MODEL } = await import('../lib/image/apiz.js')
 const { resolveApizApiKey, readApizCliApiKey } = await import('../lib/image/apizUpload.js')
 const { normalizeReferenceInput, assemblePrompt, runGenerate, IMAGES_DIR } = await import('../lib/generate.js')
@@ -331,6 +331,34 @@ test('resolveApizApiKey：配置 > 环境变量 > CLI 登录态（默认不自�
   if (prevEnv !== undefined) process.env.APIZ_API_KEY = prevEnv
 })
 
+// ---------------------------------------------------------------- data.js · 当前风格槽（两步向导枢纽）
+
+test('style：save/get/clear 生命周期；缺 prompt/缺参考图被拒', () => {
+  clearStyle()
+  assert.equal(readStyle(), null)
+  assert.throws(() => saveStyle({ referenceImage: '/x.jpg' }), /风格提示词必须是 JSON 对象/)
+  const saved = saveStyle({ prompt: { 风格模式: '测试风格' }, referenceImage: 'D:/pics/ref.jpg', note: '粗描边漫画' })
+  assert.ok(saved.updatedAt)
+  const read = readStyle()
+  assert.equal(read.referenceImage, 'D:/pics/ref.jpg')
+  assert.equal(read.prompt['风格模式'], '测试风格')
+  assert.equal(read.note, '粗描边漫画')
+  assert.equal(clearStyle(), true)
+  assert.equal(readStyle(), null)
+  assert.equal(clearStyle(), false)
+})
+
+test('saveUploadDataUrl：data URL 落盘 uploads/，扩展名按 mime；非法输入报错', () => {
+  const file = saveUploadDataUrl('data:image/jpeg;base64,/9j/4AAQSkZJRg==', '风格图.jpg')
+  assert.ok(file.startsWith(UPLOADS_DIR))
+  assert.ok(file.endsWith('.jpg'))
+  assert.ok(existsSync(file))
+  const png = saveUploadDataUrl('data:image/png;base64,iVBORw0KGgo=')
+  assert.ok(png.endsWith('.png'))
+  assert.throws(() => saveUploadDataUrl('https://not-a-data-url.jpg'), /data URL/)
+  assert.throws(() => saveUploadDataUrl('data:image/jpeg;base64,'), /data URL/)
+})
+
 // ---------------------------------------------------------------- image/apiz.js · 任务链路（mock fetch）
 
 /** mock apiz HTTP：create → query（pending 次数可配）→ 图片下载。 */
@@ -478,9 +506,9 @@ test('runGenerate：未配置 key 时报兜底指引（apiz CLI）', async () =>
 
 const { TOOLS, configRef } = await import('../lib/tools.js')
 
-test('tools：五个工具齐备，output 契约 {schema, render} 且 schema additionalProperties:false', () => {
+test('tools：六个工具齐备，output 契约 {schema, render} 且 schema additionalProperties:false', () => {
   const names = TOOLS.map((t) => t.name)
-  assert.deepEqual(names.sort(), ['ips_diff', 'ips_generate', 'ips_history', 'ips_presets', 'ips_validate'])
+  assert.deepEqual(names.sort(), ['ips_diff', 'ips_generate', 'ips_history', 'ips_presets', 'ips_style', 'ips_validate'])
   for (const tool of TOOLS) {
     assert.equal(tool.output.schema.additionalProperties, false, `${tool.name} output schema 必须 additionalProperties:false`)
     for (const key of tool.output.schema.required) assert.ok(key in tool.output.schema.properties, `${tool.name} required 字段缺定义: ${key}`)
@@ -559,6 +587,25 @@ test('tools：ips_history list/remove/clear 与出图历史打通', async () => 
   assert.equal((await tool.execute({ action: 'remove', id })).ok, true)
   assert.equal((await tool.execute({ action: 'remove', id: 'ghost' })).ok, false)
   assert.equal((await tool.execute({ action: 'clear' })).ok, true)
+})
+
+test('tools：ips_style set 必须带参考图（铁律），get/clear 全链路', async () => {
+  const tool = TOOLS.find((t) => t.name === 'ips_style')
+  clearStyle()
+  const missing = await tool.execute({ action: 'set', prompt: { 风格模式: 'x' } })
+  assert.equal(missing.ok, false)
+  assert.match(missing.summary, /referenceImage/)
+
+  const saved = await tool.execute({ action: 'set', prompt: { 风格模式: '粗描边漫画' }, referenceImage: 'D:/pics/ref.jpg', note: '讽刺漫画' })
+  assert.equal(saved.ok, true)
+  const got = await tool.execute({ action: 'get' })
+  const payload = JSON.parse(got.data)
+  assert.equal(payload.referenceImage, 'D:/pics/ref.jpg')
+  assert.equal(payload.note, '讽刺漫画')
+  await tool.execute({ action: 'clear' })
+  const gotEmpty = await tool.execute({ action: 'get' })
+  assert.equal(gotEmpty.ok, false)
+  assert.match(gotEmpty.summary, /第 1 步/)
 })
 
 test('tools：ips_generate 未配置 key 时的回执走 isError 语义（ok=false + 指引）', async () => {

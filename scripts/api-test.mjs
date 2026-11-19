@@ -1,7 +1,7 @@
 // api 路由冒烟：把 registerApi 的 handler 包成真实 http server，逐条路由真实 fetch。
 // 运行：node scripts/api-test.mjs （出图任务用未配置 key 的失败路径，不花钱）
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:http'
@@ -115,14 +115,20 @@ await test('POST /api/generate 缺 prompt → 400', async () => {
   assert.equal(r.status, 400)
 })
 
-await test('GET /api/history + remove + clear', async () => {
+await test('GET /api/history + remove + clear（失败也入历史）', async () => {
   const list = await get('/api/history')
   assert.equal(list.body.ok, true)
-  assert.equal(list.body.total, 0)
+  // 上一步「未配置 key」的失败必须落一条失败记录：否则「失败 N」恒为 0，事后无法回看原因
+  assert.equal(list.body.total, 1)
+  assert.equal(list.body.stats.failed, 1)
+  assert.equal(list.body.list[0].ok, false)
+  assert.match(String(list.body.list[0].error), /apizApiKey|apiz CLI/)
   const removed = await post('/api/history/remove', { id: 'ghost' })
   assert.equal(removed.status, 404)
   const cleared = await post('/api/history/clear', {})
   assert.equal(cleared.body.ok, true)
+  const after = await get('/api/history')
+  assert.equal(after.body.total, 0)
 })
 
 await test('GET /media → 目录约束（外部路径 403 / 404）', async () => {
@@ -163,6 +169,25 @@ await test('风格槽路由：upload 落盘 → set 写回 → get 可读 → cl
 
 await test('六个工具全部可从 api 侧取到（同引擎）', async () => {
   assert.equal(TOOLS.length, 6)
+})
+
+await test('手填本地参考图：link 登记后 /media 才放行，非法路径被拒', async () => {
+  // 造两张「用户自己的」文件（不在 uploads/ 下）：一张真图、一张非图片
+  const external = join(tmpdir(), `ips-ref-${Date.now()}.png`)
+  writeFileSync(external, Buffer.from('iVBORw0KGgo=', 'base64'))
+  const notImage = join(tmpdir(), `ips-not-image-${Date.now()}.txt`)
+  writeFileSync(notImage, 'not an image')
+
+  const before = await fetch(`${base}/media?path=${encodeURIComponent(external)}`)
+  assert.equal(before.status, 403, '未登记的本地图不应被 /media 放行')
+  const linked = await post('/api/style/link', { path: external })
+  assert.equal(linked.body.ok, true, JSON.stringify(linked.body))
+  const after = await fetch(`${base}/media?path=${encodeURIComponent(external)}`)
+  assert.equal(after.status, 200, '登记后缩略图应可读取')
+  const missing = await post('/api/style/link', { path: join(tmpdir(), 'nope-does-not-exist.png') })
+  assert.equal(missing.status, 400, '不存在的路径应被拒')
+  const wrongType = await post('/api/style/link', { path: notImage })
+  assert.equal(wrongType.status, 400, '非图片文件应被拒')
 })
 
 server.close()

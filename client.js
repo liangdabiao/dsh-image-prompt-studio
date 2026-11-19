@@ -1,6 +1,6 @@
 // 提示词工作台 · 浏览器半边
 // 侧栏加「提示词工作台」入口；主区域是 /image-prompt-studio/ 的工作台页面（iframe）：
-// 预设库 / 提示词编辑器（校验+diff）/ 出图与历史看板。
+// 出图工作台（两步向导）/ 风格库 / 生成历史 三个页签。
 // 明暗跟随 dsh 主题，切换时把配色发给页面。
 //
 // 注意：这个文件直接调 window.__ModuleLoader__.load，不要再被 build banner 包一层，
@@ -68,12 +68,24 @@ window.__ModuleLoader__.load({
             if (!frame || e.source !== frame.contentWindow || e.origin !== location.origin) return
             const m = e.data
             if (!m || m.type !== 'image-prompt-studio:ask' || typeof m.prompt !== 'string') return
-            // 「在对话里继续」：把当前 JSON（或 diff 结论）带进新对话
-            try {
-              ctx.uiWorkspace.startSession(undefined, { prompt: m.prompt, whenDraftExists: 'replace' })
-            } catch (err) {
+            // 「在对话里继续」：把指令带进新对话。
+            // 开新会话会把主区域切到对话（面板 iframe 随之卸载），所以成败都要回执给页面：
+            // 页面据此决定显示「已发起」还是「未能打开对话」，不靠乐观提示骗用户。
+            const fail = (err) => {
               console.error('[image-prompt-studio] 开新对话失败', err)
               post(frame, { type: 'image-prompt-studio:ask-failed', message: String((err && err.message) || err) })
+            }
+            try {
+              const started = ctx.uiWorkspace.startSession(undefined, { prompt: m.prompt, whenDraftExists: 'replace' })
+              // startSession 多数版本不返回 Promise（内部自己 catch + console.warn），
+              // 所以能确认的只有「指令已交给宿主」，不能声称「对话已打开」——面板文案不许越过这个事实。
+              if (started && typeof started.then === 'function') {
+                started.then(() => post(frame, { type: 'image-prompt-studio:ask-dispatched' }), fail)
+              } else {
+                post(frame, { type: 'image-prompt-studio:ask-dispatched' })
+              }
+            } catch (err) {
+              fail(err)
             }
           }
         }, [])

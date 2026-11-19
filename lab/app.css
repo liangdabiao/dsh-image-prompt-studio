@@ -1,15 +1,21 @@
 /* 提示词工作台 · 面板样式（明暗由 data-scheme 切换，宿主 client.js postMessage 同步） */
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --border: #d9dde3;
-  --fg: #1c2330; --muted: #6b7484; --accent: #7c5cff; --accent-soft: #efeaff;
+  --fg: #1c2330; --muted: #6b7484; --accent: #6f4cf0; --accent-soft: #efeaff; --on-accent: #ffffff;
   --ok: #17845a; --ok-soft: #e3f5ec; --err: #c23934; --err-soft: #fbe9e8; --warn: #9a6700; --warn-soft: #fff3d6;
 }
 body[data-scheme="dark"] {
   --bg: #17191f; --panel: #1f222b; --border: #333846;
-  --fg: #e6e9ef; --muted: #9aa3b2; --accent: #a18bff; --accent-soft: #2a2542;
+  --fg: #e6e9ef; --muted: #9aa3b2; --accent: #a18bff; --accent-soft: #2a2542; --on-accent: #17121f;
   --ok: #4cc38a; --ok-soft: #17291f; --err: #ef6b64; --err-soft: #2e1b1a; --warn: #d9a53f; --warn-soft: #2b2312;
 }
 * { box-sizing: border-box; }
+/* hidden 属性必须压过作者样式的 display（.style-card/.wb-lib-row 都是 flex，否则首屏会露出假的「风格已就绪」卡） */
+[hidden] { display: none !important; }
+/* 主题色由宿主 postMessage 同步：拿到 scheme 前不画，避免暗色宿主下闪白。
+   1.5s 后由 CSS 动画兜底显示——即使脚本没跑起来，也不会留下一个永久空白的页面。 */
+body:not([data-scheme]) { visibility: hidden; animation: scheme-reveal .01s linear 1.5s forwards; }
+@keyframes scheme-reveal { to { visibility: visible; } }
 html, body { height: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--fg);
@@ -26,6 +32,11 @@ body {
 .chip { background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 2px 10px; font-size: 12px; }
 .chip.err { background: var(--err-soft); color: var(--err); }
 .chip.ok { background: var(--ok-soft); color: var(--ok); }
+/* 全局横幅：鉴权失败 / 服务异常时把真原因显示出来（不再伪装成「apiz 未配置」） */
+.banner { margin: 10px 16px 0; border-radius: 10px; padding: 8px 14px; font-size: 12px; background: var(--err-soft); color: var(--err); border: 1px solid var(--err); }
+.banner a { color: inherit; }
+/* 按钮被禁用的原因（apiz 未配置等），紧贴按钮显示一行 */
+.blocked-hint { color: var(--warn); font-size: 12px; }
 
 /* 页签 */
 .tabs { display: flex; gap: 4px; padding: 8px 16px 0; background: var(--panel); border-bottom: 1px solid var(--border); }
@@ -42,8 +53,8 @@ main { flex: 1; overflow: auto; padding: 14px 16px; }
 /* 按钮 */
 .btn { border: 1px solid var(--border); background: var(--panel); color: var(--fg); border-radius: 7px; padding: 6px 14px; cursor: pointer; font-size: 13px; }
 .btn:hover { border-color: var(--accent); color: var(--accent); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn.primary:hover { opacity: .92; color: #fff; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { opacity: .92; color: var(--on-accent); }
 .btn.ghost { background: transparent; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 
@@ -56,7 +67,7 @@ main { flex: 1; overflow: auto; padding: 14px 16px; }
 .step-card p { margin: 0; }
 .upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .upload-row input[type="text"] { flex: 1; min-width: 220px; }
-.upload-btn { background: var(--accent); color: #fff; border-radius: 8px; padding: 7px 16px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+.upload-btn { background: var(--accent); color: var(--on-accent); border-radius: 8px; padding: 7px 16px; cursor: pointer; font-size: 13px; white-space: nowrap; }
 .upload-btn:hover { opacity: .92; }
 .ref-preview img { max-width: 200px; max-height: 150px; border-radius: 10px; border: 1px solid var(--border); }
 .style-card { display: flex; gap: 12px; align-items: flex-start; background: var(--ok-soft); border: 1px solid var(--ok); border-radius: 12px; padding: 12px; flex-wrap: wrap; }
@@ -135,5 +146,9 @@ textarea#gen-prompt { min-height: 160px; }
 .history-item img { width: 128px; border-radius: 8px; border: 1px solid var(--border); }
 .history-item .meta { font-size: 12px; color: var(--muted); word-break: break-all; }
 .history-item .meta b { color: var(--fg); font-weight: 600; }
+/* 失败记录/告警在历史条目里也要可读（这里不在 .report 容器内） */
+.history-item .line { font-size: 12px; border-radius: 6px; padding: 3px 8px; margin-top: 4px; }
+.history-item .line.err { background: var(--err-soft); color: var(--err); }
+.history-item .line.warn { background: var(--warn-soft); color: var(--warn); }
 .history-item .path { color: var(--fg); font-size: 12px; word-break: break-all; }
 @media (max-width: 700px) { .history-item { grid-template-columns: 1fr; } }

@@ -110,4 +110,4 @@ Nano Banana 结构化提示词的完整 Schema 与逐字段填写要领。生成
 
 ## 完整范例
 
-见 `assets/presets/海边中秋星野.json`（项目 README 同款标准示例）。
+见 `assets/presets/海边中秋星野.json`（随包齐全的标准示例，26 字段全填）。

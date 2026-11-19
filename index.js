@@ -1,6 +1,6 @@
 // 提示词工作台 · Host 半边
 // 1. 把随包的 skill（skills/image-prompt-studio）注册进 ctx.skills，模型和 /skill 都能用
-// 2. 注册五个工具（lib/tools.js）：结构校验、冻结度比对、预设库、apiz 生图、生成历史
+// 2. 注册六个工具（lib/tools.js）：结构校验、冻结度比对、预设库、风格槽、apiz 生图、生成历史
 // 3. /image-prompt-studio 工作台：静态页面（lab/）+ 数据接口（lib/api.js）
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'

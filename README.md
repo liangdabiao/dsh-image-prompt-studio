@@ -71,10 +71,11 @@ dsh plugin --profile web add https://github.com/liangdabiao/dsh-image-prompt-stu
 
 ```bash
 npm install
-node test/lib.test.mjs        # 33 个单测（离线，网络全 mock）
+node test/lib.test.mjs        # 37 个单测（离线，网络全 mock）
 node scripts/selftest.mjs     # 包完整性 + 金标准 + 上游 python 校验器对齐
-node scripts/api-test.mjs     # 面板 API 全路由
-node scripts/client-smoke.mjs # 客户端模块冒烟
+node scripts/api-test.mjs     # 面板 API 全路由（14 条，含失败入历史、手填参考图登记）
+node scripts/client-smoke.mjs # 客户端模块冒烟（slot 注册）
+node scripts/lab-smoke.mjs    # 面板静态冒烟（选择器↔DOM、无 alert/confirm、hidden/主题兜底）
 node scripts/live.mjs         # 真实出图（花 10 积分，可选）
 ```
 

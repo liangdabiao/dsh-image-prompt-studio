@@ -6,7 +6,7 @@
   <title>提示词工作台</title>
   <link rel="stylesheet" href="app.css">
 </head>
-<body data-scheme="light">
+<body>
   <header class="topbar">
     <div class="brand">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
@@ -31,6 +31,7 @@
     <button class="tab" data-tab="library">风格库 <span id="lib-count" class="badge mut" hidden></span></button>
     <button class="tab" data-tab="history">生成历史</button>
   </nav>
+  <div id="auth-banner" class="banner" hidden></div>
 
   <main>
     <!-- 出图工作台：两步主流程 -->
@@ -48,6 +49,7 @@
           </div>
           <div id="wb-ref-preview" class="ref-preview" hidden><img alt="参考图预览"></div>
           <button id="btn-wb-analyze" class="btn primary" disabled>① 分析这张图，生成风格 →</button>
+          <div class="muted">点按钮会在新对话里让 agent 读图分析（面板会切到对话）；分析完点侧栏「提示词工作台」回来，风格已经写进第 2 步。</div>
           <div class="report" id="wb-step1-report"></div>
         </div>
         <!-- 第 2 步：选风格 + 描述要求 → 出图 -->
@@ -63,9 +65,9 @@
               <div class="muted" id="wb-style-note"></div>
               <div class="save-row">
                 <input type="text" id="wb-save-name" placeholder="风格名（保存到风格库）">
-                <button id="btn-wb-save" class="btn">保存到风格库</button>
+                <button id="btn-wb-save" class="btn" disabled>保存到风格库</button>
               </div>
-              <details id="wb-json-view" hidden><summary>查看风格 JSON</summary><pre id="wb-json-pre"></pre></details>
+              <details id="wb-json-view"><summary>查看风格 JSON</summary><pre id="wb-json-pre"></pre></details>
             </div>
           </div>
           <label id="wb-lib-row" class="wb-lib-row" hidden>从风格库选
@@ -87,9 +89,10 @@
               <select id="wb-aspect"><option>1:1</option><option>3:4</option><option>4:5</option><option>9:16</option><option>16:9</option><option>4:3</option><option>3:2</option><option>2:3</option></select>
             </label>
           </div>
+          <div id="wb-blocked" class="blocked-hint" hidden></div>
           <button id="btn-wb-generate" class="btn primary" disabled>② 生成图片（agent 精修 + 带风格参考图）</button>
           <button id="btn-wb-direct" class="btn" disabled>不改提示词直接出图（更快）</button>
-          <div class="muted">推荐第一条：agent 把你的描述融进画面主体（风格逐字冻结）再出图；第二条把描述作为附加要求直接传给模型，快但粗。</div>
+          <div class="muted">推荐第一条：agent 把你的描述融进画面主体（风格逐字冻结）再出图；第二条把描述作为附加要求直接传给模型，快但粗。上面的模型与比例对两条路径都生效。</div>
           <div class="report" id="wb-step2-report"></div>
         </div>
       </div>

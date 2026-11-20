@@ -2,6 +2,8 @@
 
 复刻图片风格，模仿风格生图！用户只要两步：**① 导入一张风格图 → ② 描述想画的画面 → 出图**。风格提示词（结构化 JSON，26 个中文叶子字段）是内部机制，由对话里的 agent 按随包 skill 自动生成与修改，用户不需要碰；同一份 JSON 同时兼容 **Nano Banana 与 GPT-Image** 双模型家族，出图统一走 apiz。
 
+<img width="1773" height="1455" alt="image" src="https://github.com/user-attachments/assets/1be74ada-8b44-4eac-810b-42916140eead" />
+
 ## 安装
 
 ```bash

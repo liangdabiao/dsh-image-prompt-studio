@@ -62,6 +62,7 @@ $('#tabs').addEventListener('click', (e) => {
   document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === `tab-${btn.dataset.tab}`))
   if (btn.dataset.tab === 'history') loadHistory()
   if (btn.dataset.tab === 'library') loadLibrary()
+  if (btn.dataset.tab === 'settings') loadSettings()
 })
 function goto(tab) {
   $(`.tab[data-tab="${tab}"]`)?.click()
@@ -294,7 +295,7 @@ function updateGenerateButtons() {
   } else {
     hint.hidden = false
     hint.textContent = apizKnown
-      ? '「直接出图」需要 apiz API Key（设置 → 插件 → 提示词工作台 填 apizApiKey）；「② 生成图片」仍可用，agent 会按 skill 走 apiz CLI 兜底。'
+      ? '「直接出图」需要 apiz API Key：切到「设置」标签填一次（或设环境变量 APIZ_API_KEY）；「② 生成图片」仍可用，agent 会按 skill 走 apiz CLI 兜底。'
       : '暂时读不到 apiz 配置状态（状态接口未就绪）：「直接出图」先禁用，稍后页面自动刷新状态；「② 生成图片」仍可用。'
   }
 }
@@ -606,6 +607,137 @@ function pollJob(jobId, box, onDone = null) {
     }
   }, 3000)
 }
+
+// ---------------------------------------------------------------- 设置（apiz Key 与默认值）
+// 写配置走宿主 config-editor（/api/settings），保存后 Loader 热应用；这里只负责表单与回显。
+const KEY_SOURCE_LABELS = {
+  config: '面板里保存的 Key',
+  env: '环境变量 APIZ_API_KEY',
+  'apiz-cli': '本机 apiz CLI 登录态',
+  none: '未配置',
+}
+const QUALITY_LABELS = {
+  low: 'low（默认，最省）',
+  medium: 'medium',
+  high: 'high（约 6.4 倍价）',
+  xhigh: 'xhigh',
+  max: 'max（最贵）',
+}
+let settingsState = null
+
+async function loadSettings() {
+  const box = $('#settings-report')
+  box.innerHTML = ''
+  $('#btn-set-save').disabled = true
+  try {
+    const r = await fetchJSON('/api/settings')
+    if (r.ok === false) throw new Error(r.error || '设置接口异常')
+    settingsState = r.settings || null
+    renderSettings()
+  } catch (err) {
+    showFailure(box, err, '读取设置失败：')
+    $('#set-key-state').textContent = '读不到设置（保存会失败，先看上面的报错）'
+  }
+}
+
+function renderSettings() {
+  const s = settingsState
+  if (!s) return
+  const a = s.apiz || {}
+
+  // 状态行：现在真正会被用去的 Key 来自哪一层
+  const state = $('#set-key-state')
+  state.innerHTML = a.configured
+    ? `✅ 当前可用：<b>${escapeHtml(KEY_SOURCE_LABELS[a.keySource] ?? a.keySource)}</b>`
+    : '⛔ 还没配置 Key：面板「直接出图」用不了（对话里的 ips_generate 也会报错，只能走 apiz CLI 兜底）'
+  const masked = a.hasApiKey ? `已保存：${escapeHtml(a.apiKey)}` : '面板里还没保存过 Key'
+  state.innerHTML += ` <span class="muted">· ${masked}${a.envKeyPresent ? ' · 检测到环境变量 APIZ_API_KEY' : ''}</span>`
+
+  $('#set-cli-state').textContent = a.cliKeyPresent
+    ? '（本机检测到 apiz 登录文件 ~/.config/apiz/config.toml）'
+    : '（本机没有 apiz 登录文件：先 apiz auth login）'
+  $('#set-cliauth').checked = a.useCliAuth === true
+  $('#set-clearkey').checked = false
+  $('#set-clearkey').disabled = !a.hasApiKey
+  const key = $('#set-key')
+  key.value = ''
+  key.placeholder = a.hasApiKey ? '已保存，留空则不修改' : '粘贴 sk- 开头的 Key'
+
+  // 模型：配置里存的就是 id（可能是自定义 id，不在内置清单里时补一项）
+  const model = $('#set-model')
+  model.innerHTML = ''
+  const models = Array.isArray(s.models) ? s.models : []
+  const seen = new Set()
+  for (const m of models) {
+    if (seen.has(m.id)) continue
+    seen.add(m.id)
+    const opt = document.createElement('option')
+    opt.value = m.id
+    opt.textContent = m.label || m.id
+    model.appendChild(opt)
+  }
+  if (s.model && !seen.has(s.model)) {
+    const opt = document.createElement('option')
+    opt.value = s.model
+    opt.textContent = `${s.model}（当前配置）`
+    model.appendChild(opt)
+  }
+  if (s.model) model.value = s.model
+
+  const quality = $('#set-quality')
+  quality.innerHTML = ''
+  for (const q of Array.isArray(s.qualities) ? s.qualities : ['low']) {
+    const opt = document.createElement('option')
+    opt.value = q
+    opt.textContent = QUALITY_LABELS[q] ?? q
+    quality.appendChild(opt)
+  }
+  quality.value = s.quality || 'low'
+
+  $('#set-baseurl').value = a.baseUrl && a.baseUrl !== 'https://api.apiz.ai' ? a.baseUrl : ''
+  $('#set-timeout').value = String(Number(a.timeoutSeconds) || 900)
+  $('#set-bin').value = a.bin || ''
+
+  const save = $('#btn-set-save')
+  save.disabled = s.available === false
+  save.title = s.available === false ? '宿主没有 config-editor 服务，保存会失败' : ''
+  if (s.available === false) {
+    $('#settings-report').innerHTML = '<div class="line err">❌ 宿主没有 config-editor 服务：这个页面的保存会失败，请升级 DSH，或在 profile 的 cordis.patch.yml 里手写 image-prompt-studio 的 config。</div>'
+  }
+}
+
+$('#btn-set-save').addEventListener('click', async () => {
+  const btn = $('#btn-set-save')
+  const box = $('#settings-report')
+  btn.disabled = true
+  btn.textContent = '保存中…'
+  box.innerHTML = ''
+  try {
+    const patch = {
+      defaultModel: $('#set-model').value,
+      quality: $('#set-quality').value,
+      apizUseCliAuth: $('#set-cliauth').checked,
+      apizBaseUrl: $('#set-baseurl').value.trim(),
+      timeoutSeconds: Number($('#set-timeout').value),
+      apizBin: $('#set-bin').value.trim(),
+    }
+    const key = $('#set-key').value.trim()
+    if ($('#set-clearkey').checked) patch.apizApiKey = ''
+    else if (key) patch.apizApiKey = key
+    const r = await fetchJSON('/api/settings', post(patch))
+    if (r.ok === false) throw new Error(r.error || '保存失败')
+    settingsState = r.settings || settingsState
+    renderSettings()
+    // 状态条与「直接出图」按钮跟着变：Key 一变立刻可用，不必等刷新
+    await loadStatus()
+    box.innerHTML = `<div class="line ok">✅ 已保存并生效（${escapeHtml(KEY_SOURCE_LABELS[r.settings?.apiz?.keySource] ?? '已写入')}）。</div>`
+  } catch (err) {
+    showFailure(box, err, '保存失败：')
+  } finally {
+    btn.disabled = false
+    btn.textContent = '保存设置'
+  }
+})
 
 // ---------------------------------------------------------------- 生成历史
 async function loadHistory() {

@@ -42,22 +42,28 @@ dsh plugin --profile web add https://github.com/liangdabiao/dsh-image-prompt-stu
 
 ## 面板「提示词工作台」
 
-侧栏入口，**只有三个页签**（没有提示词 JSON、没有参数表单——那些是 agent 的内部机制）：
+侧栏入口，**四个页签**（没有提示词 JSON、没有参数表单——那些是 agent 的内部机制）：
 
 - **出图工作台**（首屏）：上面两步向导；Step2 还提供「不改提示词直接出图」快速通道（描述作为附加要求直传模型）
 - **风格库**：已保存风格的缩略图墙（风格名/概括/参考图），「用于生图」一键选中回工作台，「删除」管理
 - **生成历史**：记录看板（积分/耗时/参数/成图缩略图）、删除、清空
+- **设置**：apiz API Key / 复用本机 CLI 登录态 / 默认模型 / 质量档位 / API 地址 / 超时 / CLI 路径。写进当前 profile 的插件配置行并热应用（插件重启一次），保存后状态条立刻变成「apiz 已配置」；面板「直接出图」和对话里的 `ips_generate` 用的是同一份 Key
 
 ## 配置
+
+**面板「设置」页可以直接改**（推荐）；也可以在 profile 的 `cordis.patch.yml` 里手写同名配置项。
 
 | 配置项 | 默认 | 说明 |
 |---|---|---|
 | `apizApiKey` | 空 | apiz API Key；留空时也可环境变量 `APIZ_API_KEY`，或本机 `apiz auth login` 后开启 `apizUseCliAuth` |
+| `apizBaseUrl` | `https://api.apiz.ai` | apiz API 地址（自建/代理时改） |
 | `apizUseCliAuth` | 关 | 复用本机 apiz CLI 登录态 |
 | `defaultModel` | `apiz/gpt-image-2.5-flare` | 也支持 `service-inference/gemini-nano-banana-2.1` 等双家族模型 |
 | `quality` | `low` | GPT-Image 五档：low(10 积分)/medium/high(64 积分)/xhigh/max |
 | `apizBin` | `apiz` | CLI 路径（参考图上传走 CLI upload，免费） |
 | `timeoutSeconds` | 900 | 生图轮询超时；超时不重提交 |
+
+Key 的解析优先级：插件配置（面板里保存的）> 环境变量 `APIZ_API_KEY` > 本机 apiz CLI 登录态（需显式开启）。设置接口 `GET/POST /image-prompt-studio/api/settings` 只回脱敏值（`sk-a****ijkl`），绝不回 Key 原文。
 
 未配置 HTTP 通道时 `ips_generate` 会报错并指引改用 **apiz CLI 兜底**（命令模板见随包 skill `references/image-generation.md`）。
 

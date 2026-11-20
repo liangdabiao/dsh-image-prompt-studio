@@ -30,6 +30,7 @@
     <button class="tab active" data-tab="workbench">出图工作台</button>
     <button class="tab" data-tab="library">风格库 <span id="lib-count" class="badge mut" hidden></span></button>
     <button class="tab" data-tab="history">生成历史</button>
+    <button class="tab" data-tab="settings">设置</button>
   </nav>
   <div id="auth-banner" class="banner" hidden></div>
 
@@ -112,6 +113,48 @@
       </div>
       <div class="hint">成图落盘在数据目录 images/ 下；模型/比例/参考图数/积分/耗时一目了然。</div>
       <div id="history-list" class="history-list"><div class="muted">加载中…</div></div>
+    </section>
+
+    <!-- 设置：apiz 生图的 Key 与默认值（面板「直接出图」和对话里的 ips_generate 共用这一份） -->
+    <section id="tab-settings" class="panel">
+      <div class="hint">这里保存的配置会写进当前 profile 的插件配置行并热应用：<b>面板「直接出图」和对话里的 ips_generate 用的是同一份 Key</b>。</div>
+      <div id="settings-report" class="report"></div>
+
+      <div class="step-card" style="max-width:780px;margin-bottom:12px">
+        <div class="step-tag">apiz 认证</div>
+        <div class="muted" id="set-key-state">读取中…</div>
+        <label>apiz API Key（sk-…）
+          <input type="password" id="set-key" autocomplete="off" spellcheck="false" placeholder="粘贴 sk- 开头的 Key；已保存时留空即不修改">
+        </label>
+        <label class="inline"><input type="checkbox" id="set-clearkey"> 清除已保存的 Key</label>
+        <label class="inline"><input type="checkbox" id="set-cliauth"> 复用本机 apiz CLI 登录态 <span class="muted" id="set-cli-state"></span></label>
+        <div class="muted">Key 去哪拿：apiz.ai 控制台 →「API Keys」→ 新建 → 复制 <b>sk-</b> 开头那串。不想填也可以设环境变量 <b>APIZ_API_KEY</b>，或本机 <b>apiz auth login</b> 后勾上「复用 CLI 登录态」。</div>
+      </div>
+
+      <div class="step-card" style="max-width:780px">
+        <div class="step-tag">生图默认值</div>
+        <div class="row">
+          <label class="grow">默认模型
+            <select id="set-model"></select>
+          </label>
+          <label>质量档位
+            <select id="set-quality"></select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="grow">apiz API 地址（留空用官方 https://api.apiz.ai）
+            <input type="text" id="set-baseurl" spellcheck="false" placeholder="https://api.apiz.ai">
+          </label>
+          <label>轮询超时（秒，30-3600）
+            <input type="text" id="set-timeout" spellcheck="false" placeholder="900">
+          </label>
+        </div>
+        <label>apiz CLI 路径（参考图上传用，留空走 PATH 里的 apiz）
+          <input type="text" id="set-bin" spellcheck="false" placeholder="留空 = 用 PATH 里的 apiz">
+        </label>
+        <button id="btn-set-save" class="btn primary">保存设置</button>
+        <div class="muted">保存后 Loader 会热应用（本插件重启一次），不用重启 DSH；保存完状态条会立刻变成「apiz 已配置」。</div>
+      </div>
     </section>
   </main>
 

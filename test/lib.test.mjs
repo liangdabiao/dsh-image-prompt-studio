@@ -630,6 +630,166 @@ test('tools：ips_generate 未配置 key 时的回执走 isError 语义（ok=fal
   assert.match(r.summary, /apiz CLI|apizApiKey/)
 })
 
+// ---------------------------------------------------------------- 面板设置（/api/settings）
+
+const { maskSecret, readSettings, saveSettings } = await import('../lib/settings.js')
+const { registerApi } = await import('../lib/api.js')
+
+/** config-editor 打桩：entries() 只有一个可寻址行，edit() 落进 state.config（模拟 profile patch 写入）。 */
+function fakeEditor(initial = {}) {
+  const state = { config: { ...initial }, edits: 0 }
+  return {
+    state,
+    entries: () => [{ id: 'entry-1', options: { id: 'image-prompt-studio', name: 'dsh-image-prompt-studio' } }],
+    async edit(entry, change) {
+      state.config = change({ ...state.config })
+      state.edits += 1
+      return state.config
+    },
+  }
+}
+
+/** 只带 configEditor + 能收 register() 的 webServer 的最小 ctx。 */
+function settingsCtx(editor) {
+  const ctx = {
+    get: (name) => (name === 'configEditor' ? editor : undefined),
+    webServer: { register(def) { ctx.handler = def.handler } },
+  }
+  return ctx
+}
+
+/** 直接打前缀 handler：mock req/res，返回 { status, body }。 */
+function callApi(ctx, { method = 'GET', path = '/api/settings', body, headers = {} } = {}) {
+  return new Promise((resolve) => {
+    const payload = body === undefined ? [] : [Buffer.from(JSON.stringify(body))]
+    const req = {
+      method,
+      url: '/image-prompt-studio' + path,
+      headers: { host: '127.0.0.1:63202', ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...headers },
+      on(event, fn) {
+        if (event === 'data') setImmediate(() => { for (const chunk of payload) fn(chunk) })
+        if (event === 'end') setImmediate(() => fn())
+        return req
+      },
+      destroy() {},
+    }
+    const res = {
+      status: 0,
+      writeHead(status) { res.status = status },
+      end(text) { resolve({ status: res.status, body: JSON.parse(String(text ?? '{}') || '{}') }) },
+    }
+    ctx.handler(req, res)
+  })
+}
+
+test('settings：maskSecret 只露首尾四位', () => {
+  assert.equal(maskSecret(''), '')
+  assert.equal(maskSecret('sk-12'), '*****')
+  assert.equal(maskSecret('sk-b3f7728db12c6c9047d56afd1102765d91c751ba'), 'sk-b****51ba')
+})
+
+test('settings：未配置时 keySource=none，配置后=config；CLI 登录态不自动复用', () => {
+  const savedEnv = process.env.APIZ_API_KEY
+  delete process.env.APIZ_API_KEY
+  try {
+    const ctx = settingsCtx(fakeEditor())
+    configRef.config = {}
+    const empty = readSettings(ctx)
+    assert.equal(empty.available, true)
+    assert.equal(empty.apiz.configured, false)
+    assert.equal(empty.apiz.keySource, 'none')
+    assert.equal(empty.apiz.hasApiKey, false)
+    assert.equal(empty.apiz.apiKey, '')
+    assert.equal(empty.quality, 'low')
+    assert.equal(empty.model, 'apiz/gpt-image-2.5-flare')
+
+    configRef.config = { apizApiKey: 'sk-abcdefghijkl', quality: 'high', apizUseCliAuth: false }
+    const filled = readSettings(ctx)
+    assert.equal(filled.apiz.keySource, 'config')
+    assert.equal(filled.apiz.apiKey, 'sk-a****ijkl')
+    assert.equal(filled.quality, 'high')
+  } finally {
+    if (savedEnv === undefined) delete process.env.APIZ_API_KEY
+    else process.env.APIZ_API_KEY = savedEnv
+  }
+})
+
+test('settings：字段白名单校验（质量档位/地址/超时）', async () => {
+  const editor = fakeEditor()
+  const ctx = settingsCtx(editor)
+  configRef.config = {}
+  await assert.rejects(() => saveSettings(ctx, { quality: 'ultra-max' }), /quality/)
+  await assert.rejects(() => saveSettings(ctx, { apizBaseUrl: 'api.apiz.ai' }), /apizBaseUrl/)
+  await assert.rejects(() => saveSettings(ctx, { timeoutSeconds: 5 }), /timeoutSeconds/)
+  await assert.rejects(() => saveSettings(ctx, { randomField: 1 }), /没有任何可保存的字段/)
+  assert.equal(editor.state.edits, 0, '校验不过不该写配置')
+})
+
+test('settings：保存走 config-editor，回显写入后的值（Key 脱敏），空串=清空', async () => {
+  const editor = fakeEditor({ apizApiKey: '' })
+  const ctx = settingsCtx(editor)
+  configRef.config = {}
+  const saved = await saveSettings(ctx, {
+    apizApiKey: 'sk-testkey1234567890',
+    quality: 'medium',
+    defaultModel: 'service-inference/gemini-nano-banana-2.1',
+    apizBaseUrl: '',
+    timeoutSeconds: 600,
+    apizUseCliAuth: true,
+  })
+  assert.equal(editor.state.edits, 1)
+  assert.equal(editor.state.config.apizApiKey, 'sk-testkey1234567890')
+  assert.equal(editor.state.config.quality, 'medium')
+  assert.equal(editor.state.config.timeoutSeconds, 600)
+  assert.equal(saved.apiz.apiKey, 'sk-t****7890', '只回脱敏值')
+  assert.equal(saved.apiz.keySource, 'config', 'Key 非空时一律用配置里这份（CLI 复用只是兜底）')
+  assert.equal(saved.quality, 'medium')
+
+  const cleared = await saveSettings(ctx, { apizApiKey: '' })
+  assert.equal(cleared.apiz.hasApiKey, false)
+  assert.equal(cleared.apiz.configured, false)
+})
+
+test('settings：宿主没有 config-editor 时不假装保存成功', async () => {
+  const ctx = { get: () => undefined, webServer: { register() {} } }
+  configRef.config = {}
+  await assert.rejects(() => saveSettings(ctx, { quality: 'low' }), /config-editor/)
+})
+
+test('api：GET/POST /api/settings 通、非法字段 400、跨源 403、GET 不泄露 Key 原文', async () => {
+  const editor = fakeEditor({ apizApiKey: '' })
+  const ctx = settingsCtx(editor)
+  registerApi(ctx)
+  configRef.config = {}
+
+  const got = await callApi(ctx)
+  assert.equal(got.status, 200)
+  assert.equal(got.body.ok, true)
+  assert.equal(got.body.settings.available, true)
+  assert.equal(got.body.settings.apiz.hasApiKey, false)
+  assert.equal(got.body.settings.qualities.includes('low'), true)
+
+  const bad = await callApi(ctx, { method: 'POST', body: { quality: 'nope' } })
+  assert.equal(bad.status, 400)
+  assert.match(bad.body.error, /quality/)
+
+  const crossOrigin = await callApi(ctx, { method: 'POST', body: { quality: 'low' }, headers: { origin: 'http://evil.example' } })
+  assert.equal(crossOrigin.status, 403)
+
+  const posted = await callApi(ctx, { method: 'POST', body: { apizApiKey: 'sk-panelkey0000001', quality: 'low' } })
+  assert.equal(posted.status, 200)
+  assert.equal(posted.body.ok, true)
+  assert.equal(posted.body.settings.apiz.hasApiKey, true)
+  assert.equal(posted.body.settings.apiz.apiKey, 'sk-p****0001')
+
+  // 模拟 Loader 热应用（插件重启 → apply 换上写入后的配置）→ 状态接口应认这份 Key
+  configRef.config = { ...editor.state.config }
+  const status = await callApi(ctx, { path: '/api/status' })
+  assert.equal(status.status, 200)
+  assert.equal(status.body.auth.configured, true)
+  assert.equal(status.body.auth.source, 'config')
+})
+
 // ---------------------------------------------------------------- 收尾（async 用例统一收口）
 
 finish()
